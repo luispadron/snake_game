@@ -5,12 +5,16 @@ pub struct ModelsPlugin;
 impl Plugin for ModelsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Score::default())
+            .insert_resource(HighScore::default())
             .insert_resource(SnakeSegments::default());
     }
 }
 
 #[derive(Default)]
 pub struct Score(pub i32);
+
+#[derive(Default)]
+pub struct HighScore(pub i32);
 
 #[derive(Component)]
 pub struct Snake {
@@ -75,3 +79,9 @@ pub enum SnakeState {
     Move,
     Eat,
 }
+
+#[derive(Component)]
+pub struct ScoreText;
+
+#[derive(Component)]
+pub struct HighScoreText;

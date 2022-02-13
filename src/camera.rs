@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowMode};
 
 use crate::constants::*;
 use crate::models::*;
@@ -7,13 +7,23 @@ pub struct SnakeCameraPlugin;
 
 impl Plugin for SnakeCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_camera)
-            .add_system_set_to_stage(
-                CoreStage::PostUpdate,
-                SystemSet::new()
-                    .with_system(position_translation)
-                    .with_system(size_scaling),
-            );
+        app.insert_resource(WindowDescriptor {
+            title: "Snake!".to_string(),
+            width: 800.,
+            height: 800.,
+            vsync: false,
+            mode: WindowMode::Windowed,
+            resizable: false,
+            ..Default::default()
+        })
+        .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+        .add_startup_system(setup_camera)
+        .add_system_set_to_stage(
+            CoreStage::PostUpdate,
+            SystemSet::new()
+                .with_system(position_translation)
+                .with_system(size_scaling),
+        );
     }
 }
 
