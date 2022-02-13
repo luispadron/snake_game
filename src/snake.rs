@@ -33,11 +33,10 @@ impl Plugin for SnakePlugin {
 }
 
 pub fn spawn_snake(mut cmd: Commands, mut segments: ResMut<SnakeSegments>) {
-    let snake_color = Color::rgb(random(), random(), random());
     let snake_head = cmd
         .spawn_bundle(SpriteBundle {
             sprite: Sprite {
-                color: snake_color,
+                color: Color::WHITE,
                 ..Default::default()
             },
             transform: Transform {
