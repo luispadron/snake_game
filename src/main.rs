@@ -10,10 +10,12 @@ fn main() {
             height: 800.,
             ..Default::default()
         })
+        .insert_resource(Score::default())
         .insert_resource(SnakeSegments::default())
         .add_startup_system(setup_camera)
         .add_startup_system(spawn_snake)
         .add_event::<GrowEvent>()
+        .add_event::<GameOverEvent>()
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()
@@ -25,18 +27,20 @@ fn main() {
                 .with_run_criteria(FixedTimestep::step(rand::random::<f64>() * 3. + 0.5))
                 .with_system(spawn_food),
         )
-        .add_system(
-            snake_movement_input
-                .label(SnakeState::Input)
-                .before(SnakeState::Move),
-        )
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(SNAKE_SPEED))
-                .with_system(snake_movement.label(SnakeState::Move))
+                .with_system(snake_movement_input.label(SnakeState::Input))
+                .with_system(
+                    snake_movement
+                        .label(SnakeState::Move)
+                        .after(SnakeState::Input),
+                )
                 .with_system(snake_eating.label(SnakeState::Eat).after(SnakeState::Move))
                 .with_system(snake_grow.label(SnakeState::Grow).after(SnakeState::Eat)),
         )
+        .add_system(snake_collision.after(SnakeState::Move))
+        .add_system(game_over.after(SnakeState::Move))
         .add_plugins(DefaultPlugins)
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
         .run();
@@ -45,6 +49,9 @@ fn main() {
 const ARENA_WIDTH: u32 = 20;
 const ARENA_HEIGHT: u32 = 20;
 const SNAKE_SPEED: f64 = 0.12;
+
+#[derive(Default)]
+struct Score(i32);
 
 #[derive(Component)]
 struct Snake {
@@ -112,6 +119,8 @@ enum SnakeState {
 }
 
 struct GrowEvent;
+
+struct GameOverEvent;
 
 fn setup_camera(mut cmd: Commands) {
     cmd.spawn_bundle(OrthographicCameraBundle::new_2d());
@@ -247,6 +256,28 @@ fn snake_movement(snake_q: Query<&Snake>, mut q: Query<(&mut Position, With<Snak
     }
 }
 
+fn snake_collision(
+    mut game_over_writer: EventWriter<GameOverEvent>,
+    snake_q: Query<&Position, With<Snake>>,
+    collidable_q: Query<&Position, (Without<Snake>, Without<Food>)>,
+) {
+    let snake_pos = *snake_q.iter().next().unwrap();
+
+    // If snake is outside arena bounds => game over
+    if snake_pos.x >= ARENA_WIDTH as i32
+        || snake_pos.x < 0
+        || snake_pos.y >= ARENA_HEIGHT as i32
+        || snake_pos.y < 0
+    {
+        game_over_writer.send(GameOverEvent);
+    }
+
+    // If snake has collided with it's own segments
+    if collidable_q.iter().any(|&c| c == snake_pos) {
+        game_over_writer.send(GameOverEvent);
+    }
+}
+
 fn snake_eating(
     mut cmd: Commands,
     mut grow_writer: EventWriter<GrowEvent>,
@@ -265,8 +296,9 @@ fn snake_eating(
 fn snake_grow(
     mut cmd: Commands,
     mut segments: ResMut<SnakeSegments>,
-    segments_q: Query<(Entity, &mut Position, With<SnakeSegment>)>,
+    mut score: ResMut<Score>,
     mut grow_reader: EventReader<GrowEvent>,
+    segments_q: Query<(Entity, &mut Position, With<SnakeSegment>)>,
 ) {
     if !grow_reader.iter().next().is_some() {
         return;
@@ -281,4 +313,29 @@ fn snake_grow(
         .1;
 
     segments.0.push(spawn_segment(&mut cmd, *last_segment_pos));
+    score.0 += 1;
+}
+
+fn game_over(
+    mut cmd: Commands,
+    mut game_over_reader: EventReader<GameOverEvent>,
+    segments: ResMut<SnakeSegments>,
+    snake_q: Query<Entity, With<Snake>>,
+    segments_q: Query<Entity, With<SnakeSegment>>,
+    food_q: Query<Entity, With<Food>>,
+) {
+    if !game_over_reader.iter().next().is_some() {
+        return;
+    }
+
+    snake_q
+        .iter()
+        .chain(segments_q.iter())
+        .chain(food_q.iter())
+        .for_each(|e| {
+            cmd.entity(e).despawn();
+        });
+
+    // Restart the game
+    spawn_snake(cmd, segments);
 }
